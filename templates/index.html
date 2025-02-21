@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Air Curtain ROI</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" crossorigin=""/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    body { padding: 20px; }
+    .container { max-width: 1200px; }
+    fieldset { border: 1px solid #ccc; padding: 10px; margin-bottom: 20px; border-radius: 5px; }
+    legend { font-weight: bold; }
+    #map { height: 400px; margin-bottom: 20px; }
+    table.striped td, table.striped th { text-align: center; }
+    footer { font-size: 0.8em; text-align: right; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h3 class="center-align">Air Curtain ROI</h3>
+    <form method="POST">
+      <fieldset>
+        <legend>Location</legend>
+        <p>Select a location by clicking on the map.</p>
+        <p style="font-size: 0.9em; color: #555;">
+          Temperature data source: Official meteorological databases (e.g., IMGW, MeteoFrance, DWD, UK Met Office, MétéoSwiss, AEMET, IPMA).
+        </p>
+        <div id="map"></div>
+        <input type="hidden" id="lat" name="lat">
+        <input type="hidden" id="lng" name="lng">
+      </fieldset>
+      <fieldset>
+        <legend>Building Operation</legend>
+        <div class="row">
+          <div class="input-field col s4">
+            <input id="indoorTempWinter" name="indoorTempWinter" type="number" step="any" required value="18">
+            <label for="indoorTempWinter">Indoor Temperature (Winter, °C)</label>
+          </div>
+          <div class="input-field col s4">
+            <input id="indoorTempSummer" name="indoorTempSummer" type="number" step="any" required value="22">
+            <label for="indoorTempSummer">Indoor Temperature (Summer, °C)</label>
+          </div>
+          <div class="input-field col s4">
+            <select name="exploitationIntensity" required>
+              <option value="0.05">Very Low (5% open time)</option>
+              <option value="0.10">Low (10% open time)</option>
+              <option value="0.15" selected>Medium (15% open time)</option>
+              <option value="0.20">Moderate (20% open time)</option>
+              <option value="0.30">High (30% open time)</option>
+            </select>
+            <label>Exploitation Intensity</label>
+          </div>
+        </div>
+        <div class="row">
+          <div class="input-field col s6">
+            <select name="openTime" required>
+              {% for hour in range(0,24) %}
+                {% set h = "%02d:00" % hour %}
+                <option value="{{ h }}" {% if h == "08:00" %}selected{% endif %}>{{ h }}</option>
+              {% endfor %}
+            </select>
+            <label>Opening Time</label>
+          </div>
+          <div class="input-field col s6">
+            <select name="closeTime" required>
+              {% for hour in range(0,24) %}
+                {% set h = "%02d:00" % hour %}
+                <option value="{{ h }}" {% if h == "18:00" %}selected{% endif %}>{{ h }}</option>
+              {% endfor %}
+            </select>
+            <label>Closing Time</label>
+          </div>
+        </div>
+      </fieldset>
+      <div class="row center-align">
+        <button class="btn waves-effect waves-light" type="submit">CALCULATE SAVINGS</button>
+      </div>
+    </form>
+  </div>
+  <footer>
+    Version: {{ version }} | Program created using AI tools.
+  </footer>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" crossorigin=""></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      var elemsSelect = document.querySelectorAll('select');
+      M.FormSelect.init(elemsSelect);
+    });
+    var map = L.map('map').setView([54, 15], 4);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+    var marker;
+    map.on('click', function(e) {
+      var lat = e.latlng.lat;
+      var lng = e.latlng.lng;
+      document.getElementById('lat').value = lat;
+      document.getElementById('lng').value = lng;
+      if (marker) {
+        marker.setLatLng(e.latlng);
+      } else {
+        marker = L.marker(e.latlng).addTo(map);
+      }
+    });
+  </script>
+</body>
+</html>
