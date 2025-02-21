@@ -3,9 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <title>Air Curtain ROI</title>
+  <!-- Materialize CSS -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet">
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" crossorigin=""/>
+  <!-- Responsive meta -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <style>
     body { padding: 20px; }
@@ -18,19 +22,72 @@
   </style>
 </head>
 <body>
+  <!-- Przycisk Info -->
+  <div class="right-align" style="margin-bottom: 20px;">
+    <a class="waves-effect waves-light btn modal-trigger" href="#infoModal">Info</a>
+  </div>
+  
   <div class="container">
     <h3 class="center-align">Air Curtain ROI</h3>
     <form method="POST">
+      <!-- Location Section -->
       <fieldset>
         <legend>Location</legend>
-        <p>Select a location by clicking on the map.</p>
+        <p>Select a location by clicking on the map of Europe.</p>
+        <!-- Informacja o źródle danych meteorologicznych -->
         <p style="font-size: 0.9em; color: #555;">
           Temperature data source: Official meteorological databases (e.g., IMGW, MeteoFrance, DWD, UK Met Office, MétéoSwiss, AEMET, IPMA).
         </p>
         <div id="map"></div>
+        <!-- Ukryte pola na współrzędne -->
         <input type="hidden" id="lat" name="lat">
         <input type="hidden" id="lng" name="lng">
+        <div class="row">
+          <div class="input-field col s6">
+            <input id="energyCost" name="energyCost" type="number" step="0.01" required value="0.25">
+            <label for="energyCost">Energy Cost (EUR/kWh)</label>
+          </div>
+          <div class="input-field col s6">
+            <select name="windiness" required>
+              <option value="medium" selected>Medium</option>
+              <option value="weak">Weak</option>
+              <option value="strong">Strong</option>
+            </select>
+            <label>Windiness</label>
+          </div>
+        </div>
       </fieldset>
+      
+      <!-- Air Curtain Section -->
+      <fieldset>
+        <legend>Air Curtain</legend>
+        <div class="row">
+          <div class="input-field col s4">
+            <input id="curtainFlow" name="curtainFlow" type="number" step="any" required value="2500">
+            <label for="curtainFlow">Air Curtain Flow (m³/h)</label>
+          </div>
+          <div class="input-field col s4">
+            <input id="motorPower" name="motorPower" type="number" step="0.01" required value="0.2">
+            <label for="motorPower">Motor Power (kW)</label>
+          </div>
+          <div class="input-field col s4">
+            <input id="curtainPrice" name="curtainPrice" type="number" step="any" required value="900">
+            <label for="curtainPrice">Curtain Price (EUR)</label>
+          </div>
+        </div>
+        <div class="row">
+          <div class="input-field col s6">
+            <input id="width" name="width" type="number" step="0.1" required value="1.5">
+            <label for="width">Door Width (m)</label>
+          </div>
+          <div class="input-field col s6">
+            <input id="height" name="height" type="number" step="0.1" required value="2.0">
+            <label for="height">Door Height (m)</label>
+          </div>
+        </div>
+      </fieldset>
+      
+      <!-- Building Operation Section -->
       <fieldset>
         <legend>Building Operation</legend>
         <div class="row">
@@ -46,11 +103,25 @@
             <select name="exploitationIntensity" required>
               <option value="0.05">Very Low (5% open time)</option>
               <option value="0.10">Low (10% open time)</option>
-              <option value="0.15" selected>Medium (15% open time)</option>
+              <option value="0.25" selected>Medium (25% open time)</option>
               <option value="0.20">Moderate (20% open time)</option>
-              <option value="0.30">High (30% open time)</option>
+              <option value="0.30">Somewhat High (30% open time)</option>
+              <option value="0.50">High (50% open time)</option>
+              <option value="0.75">Very High (75% open time)</option>
+              <option value="1.0">Max (100% open time)</option>
             </select>
             <label>Exploitation Intensity</label>
+          </div>
+        </div>
+        <div class="row">
+          <div class="input-field col s12">
+            <select multiple name="operatingDays" required>
+              {% set days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
+              {% for day in days %}
+                <option value="{{ day }}" selected>{{ day }}</option>
+              {% endfor %}
+            </select>
+            <label>Select Operating Days</label>
           </div>
         </div>
         <div class="row">
@@ -67,32 +138,205 @@
             <select name="closeTime" required>
               {% for hour in range(0,24) %}
                 {% set h = "%02d:00" % hour %}
-                <option value="{{ h }}" {% if h == "18:00" %}selected{% endif %}>{{ h }}</option>
+                <option value="{{ h }}" {% if h == "20:00" %}selected{% endif %}>{{ h }}</option>
               {% endfor %}
             </select>
             <label>Closing Time</label>
           </div>
         </div>
       </fieldset>
+      
       <div class="row center-align">
-        <button class="btn waves-effect waves-light" type="submit">CALCULATE SAVINGS</button>
+        <button class="btn waves-effect waves-light" type="submit">
+          CALCULATE SAVINGS <i class="material-icons right">send</i>
+        </button>
       </div>
     </form>
+    
+    {% if result %}
+      <h5 class="center-align">Results</h5>
+      <!-- Energy Consumption Table -->
+      <div class="row">
+        <div class="col s12">
+          <table class="striped">
+            <thead>
+              <tr>
+                <th>Month (m)</th>
+                <th>Effective Operating Hours (h)</th>
+                <th>Thermodynamical Energy Consumption without Air Curtain (kWh)</th>
+                <th>Thermodynamical Energy Consumption with Air Curtain (kWh)</th>
+                <th>Motor Energy Consumption (kWh)</th>
+                <th>Total Energy Consumption (kWh)</th>
+                <th>Savings (kWh)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for i in range(result.months|length) %}
+                <tr>
+                  <td>{{ result.months[i] }}</td>
+                  <td>{{ result.monthly_operating_hours[i] }}</td>
+                  <td>{{ result.energy_without[i] }}</td>
+                  <td>{{ result.energy_with[i] }}</td>
+                  <td>{{ result.motor_energy[i] }}</td>
+                  <td>{{ result.energy_with[i] + result.motor_energy[i] }}</td>
+                  <td>{{ result.monthly_savings[i] }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Temperature and Seasonal Data Table -->
+      <div class="row">
+        <div class="col s12">
+          <table class="striped">
+            <thead>
+              <tr>
+                <th>Month (m)</th>
+                <th>Avg. Outdoor Temp. (°C)</th>
+                <th>Outdoor Temp. for Operating Period (°C)</th>
+                <th>Indoor Room Temp. (°C)</th>
+                <th>Season Info</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in temp_table %}
+                <tr>
+                  <td>{{ row.month }}</td>
+                  <td>{{ row.temperature }}</td>
+                  <td>{{ row.operating_temperature }}</td>
+                  <td>{{ row.indoor_temperature }}</td>
+                  <td>{{ row.season_warning }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <p class="center-align" style="font-size:0.9em; color:#555;">
+            (Data based on the nearest city: {{ chosen_city }})
+          </p>
+        </div>
+      </div>
+      
+      <!-- Annual Summary Table -->
+      <div class="row">
+        <div class="col s12">
+          <table class="striped">
+            <thead>
+              <tr>
+                <th>Annual Energy Loss &amp; Cost without Air Curtain</th>
+                <th>Annual Energy Loss &amp; Cost with Air Curtain</th>
+                <th>Benefits (Cost Savings)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  Energy Loss: {{ result.annual_energy_without }} kWh<br>
+                  Cost: {{ result.annual_cost_without }}
+                </td>
+                <td>
+                  Energy Loss: {{ result.annual_energy_with }} kWh<br>
+                  Motor Energy: {{ result.annual_motor_energy }} kWh<br>
+                  Curtain Cost: {{ result.annual_cost_with }}<br>
+                  Motor Cost: {{ result.annual_cost_motor }}<br>
+                  Total: {{ result.annual_energy_with_motor }} kWh, {{ result.annual_cost_with_motor }}
+                </td>
+                <td>
+                  Savings Energy: {{ result.annual_savings_energy }} kWh<br>
+                  Savings Cost: {{ result.annual_savings_cost }}<br>
+                  {% if result.payback_period %}
+                    Payback Period: {{ result.payback_period | round(2) }} years
+                  {% else %}
+                    Payback Period: N/A
+                  {% endif %}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Energy Consumption Chart -->
+      <div class="row">
+        <div class="col s12">
+          <canvas id="energyChart"></canvas>
+        </div>
+      </div>
+      
+      <!-- Payback Period Comparison Chart -->
+      <div class="row">
+        <div class="col s12">
+          <canvas id="paybackChart"></canvas>
+        </div>
+      </div>
+    {% endif %}
   </div>
+  
   <footer>
-    Version: {{ version }} | Program created using AI tools.
+    Version: {{ version }} | Program created by Filip Konieczny using AI tools.
   </footer>
+  
+  <!-- Modal Info -->
+  <div id="infoModal" class="modal">
+    <div class="modal-content">
+      <h5>How It Works</h5>
+      <p><strong>1. Data Acquisition:</strong><br>
+         The program loads monthly average outdoor temperature data and city coordinates from an external CSV file (<code>climate_data.txt</code>). This data is assumed to come from official meteorological databases such as IMGW (Poland), MeteoFrance (France), DWD (Germany), UK Met Office (UK), MétéoSwiss (Switzerland), AEMET (Spain) and IPMA (Portugal).</p>
+      
+      <p><strong>2. Location Selection:</strong><br>
+         Users select a location on a map of Europe. The program uses the <em>haversine</em> formula to determine the nearest city (from the CSV data) to the selected coordinates.</p>
+      
+      <p><strong>3. Temperature Approximation:</strong><br>
+         For each month, the base outdoor temperature (<em>T<sub>out</sub></em>) is taken from the CSV file. To approximate the effective temperature during building operating hours, the program uses a sinusoidal function to simulate diurnal temperature variations:<br>
+         <em>T<sub>operating</sub> = T<sub>out</sub> + A × sin(π/12 × (t − 5))</em><br>
+         where <em>A</em> is an amplitude constant (default = 5) and <em>t</em> spans from the opening to the closing time in steps (default step = 0.5 h). The average of these values over the operating period is used in further calculations.</p>
+      
+      <p><strong>4. Energy Consumption Calculation:</strong><br>
+         - <em>Natural Ventilation Flow:</em> The program estimates the natural airflow through the door using the formula:<br>
+         <em>Q<sub>natural</sub> = C<sub>d</sub> × A<sub>area</sub> × √(2×Δp/ρ)</em><br>
+         where Δp (pressure difference) is calculated as <em>ρ × g × height × (ΔT/T<sub>inside</sub>)</em> (with ρ = 1.2 kg/m³, g = 9.81 m/s², and T<sub>inside</sub> in Kelvin), and C<sub>d</sub> is the discharge coefficient (default = 0.6).
+         <br>
+         - <em>Adjusted Flow:</em> The natural flow is then corrected by a windiness factor.
+         <br>
+         - <em>Energy Loss:</em> The energy loss without an air curtain is calculated by multiplying the mass flow rate by the specific heat (c<sub>p</sub> = 1005 J/kg·K) and the temperature difference, integrated over the operating hours.
+      </p>
+      
+      <p><strong>5. Air Curtain Effect:</strong><br>
+         When the air curtain is installed, its effectiveness (<em>η</em>) is computed as the ratio of the curtain’s flow capacity to the natural flow (capped at 1). The effective airflow becomes <em>Q<sub>effective</sub> = Q<sub>corrected</sub> × (1 − η)</em>, thereby reducing the energy loss. Additionally, the program accounts for the motor energy consumption during operation.
+      </p>
+      
+      <p><strong>6. Savings and ROI:</strong><br>
+         The program sums the monthly energy losses (with and without the air curtain), calculates the corresponding costs (using the provided energy cost), and then determines the annual savings. Finally, the payback period is estimated as the ratio of the curtain's price to the annual cost savings.
+      </p>
+      
+      <p><strong>7. Output:</strong><br>
+         All results are displayed in tables and charts, including detailed monthly values and an annual summary.</p>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" class="modal-close waves-effect waves-green btn-flat">Close</a>
+    </div>
+  </div>
+  
+  <!-- Materialize JS + Initialization -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <!-- Leaflet JS (bez integrity) -->
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" crossorigin=""></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       var elemsSelect = document.querySelectorAll('select');
       M.FormSelect.init(elemsSelect);
+      
+      var modalElems = document.querySelectorAll('.modal');
+      M.Modal.init(modalElems);
     });
+    
+    // Inicjalizacja mapy Leaflet
     var map = L.map('map').setView([54, 15], 4);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
+    
     var marker;
     map.on('click', function(e) {
       var lat = e.latlng.lat;
@@ -105,6 +349,70 @@
         marker = L.marker(e.latlng).addTo(map);
       }
     });
+    
+    {% if chart_data %}
+    const data = {{ chart_data|safe }};
+    const ctx = document.getElementById('energyChart').getContext('2d');
+    const energyChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.months,
+        datasets: [
+          {
+            label: 'Without Air Curtain',
+            data: data.without,
+            borderColor: 'red',
+            fill: false
+          },
+          {
+            label: 'With Air Curtain + Motor',
+            data: data.with,
+            borderColor: 'green',
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: true, text: 'Monthly Energy Consumption' }
+        }
+      }
+    });
+    {% endif %}
+    
+    {% if payback_chart_data %}
+    const paybackData = {{ payback_chart_data|safe }};
+    const ctx2 = document.getElementById('paybackChart').getContext('2d');
+    const paybackChart = new Chart(ctx2, {
+      type: 'line',
+      data: {
+        labels: paybackData.years,
+        datasets: [
+          {
+            label: 'Scenario 1: No Investment',
+            data: paybackData.without,
+            borderColor: 'red',
+            fill: false
+          },
+          {
+            label: 'Scenario 2: With Investment',
+            data: paybackData.with,
+            borderColor: 'green',
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: true, text: 'Cumulative Cost Comparison & Payback Period (years)' }
+        }
+      }
+    });
+    {% endif %}
   </script>
 </body>
 </html>
