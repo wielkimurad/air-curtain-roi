@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Raport PDF - AirCurtainCALC</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1, h2, h3 { text-align: center; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>Raport z Obliczeń AirCurtainCALC</h1>
+  <h3>Wersja 8.0</h3>
+  
+  <h2>Założenia</h2>
+  <p>Dane wejściowe:</p>
+  <ul>
+    <li>Lokalizacja: {{ data.lat }}, {{ data.lng }}</li>
+    <li>Koszt Energii: {{ data.energyCost }} EUR/kWh</li>
+    <!-- Dodaj inne założenia, jakie zostały wprowadzone przez użytkownika -->
+  </ul>
+  
+  <h2>Wyniki Obliczeń</h2>
+  <p>{{ data.report }}</p>
+  
+  <h2>Kontakt</h2>
+  <p>Filip Konieczny<br>
+     Email: filip.koniecz@gmail.com<br>
+     LinkedIn: https://www.linkedin.com/in/filip-konieczny/</p>
+</body>
+</html>

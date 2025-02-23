@@ -2,14 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Air Curtain ROI</title>
+  <title>AirCurtainCALC</title>
+  <!-- Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Lobster&display=swap" rel="stylesheet">
   <!-- Materialize CSS -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet">
+  <!-- Material Icons -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" crossorigin=""/>
-  <!-- Responsive meta -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <style>
     body { padding: 20px; }
@@ -18,99 +21,141 @@
     legend { font-weight: bold; }
     #map { height: 400px; margin-bottom: 20px; }
     table.striped td, table.striped th { text-align: center; }
+    /* Add vertical lines after specified columns */
+    th.wind_all, td.wind_all,
+    th.wind_oper, td.wind_oper,
+    th.indoor, td.indoor {
+      border-right: 1px solid #ccc;
+    }
+    /* In Energy Loss table, no green coloring */
+    .energy { font-weight: bold; color: inherit; }
+    /* For Annual Summary table, add vertical lines between columns */
+    table.annual td, table.annual th { border-right: 1px solid #ccc; }
     footer { font-size: 0.8em; text-align: right; margin-top: 20px; }
+    .banner-title { font-family: 'Lobster', cursive; font-size: 200%; }
+    #loading {
+      display: none; position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background-color: rgba(255, 255, 255, 0.8);
+      z-index: 9999; text-align: center; padding-top: 200px;
+      font-size: 20px; color: #333;
+    }
   </style>
 </head>
 <body>
-  <!-- Przycisk Info -->
+  <!-- Spinner -->
+  <div id="loading">
+    <div class="preloader-wrapper big active">
+      <div class="spinner-layer spinner-blue">
+        <div class="circle-clipper left"><div class="circle"></div></div>
+        <div class="gap-patch"><div class="circle"></div></div>
+        <div class="circle-clipper right"><div class="circle"></div></div>
+      </div>
+    </div>
+    <p>Loading data, please wait...</p>
+  </div>
+
+  <!-- Banner -->
+  <div class="card-panel teal lighten-2" style="margin-bottom: 20px; display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <h4 class="white-text banner-title" style="margin:0;">AirCurtainCALC</h4>
+    </div>
+    <div>
+      <img src="/static/banner.png" alt="Air Curtain" style="max-height:80px;">
+    </div>
+  </div>
+  
+  <!-- Buttons: Info, CONTACT, CALCULATIONS -->
   <div class="right-align" style="margin-bottom: 20px;">
     <a class="waves-effect waves-light btn modal-trigger" href="#infoModal">Info</a>
+    <a class="waves-effect waves-light btn modal-trigger" href="#kontaktModal" style="margin-left:10px;">CONTACT</a>
+    <a class="waves-effect waves-light btn modal-trigger" href="#calculationsModal" style="margin-left:10px;">CALCULATIONS</a>
   </div>
   
   <div class="container">
-    <h3 class="center-align">Air Curtain ROI</h3>
-    <form method="POST">
-      <!-- Location Section -->
+    <form method="POST" id="calcForm">
+      <!-- Location -->
       <fieldset>
-        <legend>Location</legend>
+        <legend>{{ translate("location", language) }}</legend>
         <p>Select a location by clicking on the map of Europe.</p>
-        <!-- Informacja o źródle danych meteorologicznych -->
-        <p style="font-size: 0.9em; color: #555;">
-          Temperature data source: Official meteorological databases (e.g., IMGW, MeteoFrance, DWD, UK Met Office, MétéoSwiss, AEMET, IPMA).
-        </p>
         <div id="map"></div>
-        <!-- Ukryte pola na współrzędne -->
         <input type="hidden" id="lat" name="lat">
         <input type="hidden" id="lng" name="lng">
         <div class="row">
           <div class="input-field col s6">
             <input id="energyCost" name="energyCost" type="number" step="0.01" required value="0.25">
-            <label for="energyCost">Energy Cost (EUR/kWh)</label>
+            <label for="energyCost">{{ translate("energy_cost", language) }}</label>
           </div>
           <div class="input-field col s6">
+            <!-- 8-step wind scale -->
             <select name="windiness" required>
-              <option value="medium" selected>Medium</option>
-              <option value="weak">Weak</option>
-              <option value="strong">Strong</option>
+              <option value="0">No Wind</option>
+              <option value="1">Very Low (-75%)</option>
+              <option value="2">Low (-50%)</option>
+              <option value="3">Below Medium (-25%)</option>
+              <option value="4" selected>Medium (default)</option>
+              <option value="5">Above Medium (+25%)</option>
+              <option value="6">High (+50%)</option>
+              <option value="7">Very High (+75%)</option>
             </select>
-            <label>Windiness</label>
+            <label>{{ translate("windiness", language) }}</label>
           </div>
         </div>
       </fieldset>
       
-      <!-- Air Curtain Section -->
+      <!-- Air Curtain -->
       <fieldset>
-        <legend>Air Curtain</legend>
+        <legend>{{ translate("air_curtain", language) }}</legend>
         <div class="row">
           <div class="input-field col s4">
             <input id="curtainFlow" name="curtainFlow" type="number" step="any" required value="2500">
-            <label for="curtainFlow">Air Curtain Flow (m³/h)</label>
+            <label for="curtainFlow">{{ translate("curtain_flow", language) }}</label>
           </div>
           <div class="input-field col s4">
-            <input id="motorPower" name="motorPower" type="number" step="0.01" required value="0.2">
-            <label for="motorPower">Motor Power (kW)</label>
+            <input id="motorPower" name="motorPower" type="number" step="0.01" required value="0.3">
+            <label for="motorPower">{{ translate("motor_power", language) }}</label>
           </div>
           <div class="input-field col s4">
-            <input id="curtainPrice" name="curtainPrice" type="number" step="any" required value="900">
-            <label for="curtainPrice">Curtain Price (EUR)</label>
+            <input id="curtainPrice" name="curtainPrice" type="number" step="any" required value="1100">
+            <label for="curtainPrice">{{ translate("curtain_price", language) }}</label>
           </div>
         </div>
         <div class="row">
           <div class="input-field col s6">
             <input id="width" name="width" type="number" step="0.1" required value="1.5">
-            <label for="width">Door Width (m)</label>
+            <label for="width">{{ translate("door_width", language) }}</label>
           </div>
           <div class="input-field col s6">
             <input id="height" name="height" type="number" step="0.1" required value="2.0">
-            <label for="height">Door Height (m)</label>
+            <label for="height">{{ translate("door_height", language) }}</label>
           </div>
         </div>
       </fieldset>
       
-      <!-- Building Operation Section -->
+      <!-- Building Operation -->
       <fieldset>
-        <legend>Building Operation</legend>
+        <legend>{{ translate("building_operation", language) }}</legend>
         <div class="row">
           <div class="input-field col s4">
             <input id="indoorTempWinter" name="indoorTempWinter" type="number" step="any" required value="18">
-            <label for="indoorTempWinter">Indoor Temperature (Winter, °C)</label>
+            <label for="indoorTempWinter">{{ translate("indoor_temp_winter", language) }}</label>
           </div>
           <div class="input-field col s4">
             <input id="indoorTempSummer" name="indoorTempSummer" type="number" step="any" required value="22">
-            <label for="indoorTempSummer">Indoor Temperature (Summer, °C)</label>
+            <label for="indoorTempSummer">{{ translate("indoor_temp_summer", language) }}</label>
           </div>
           <div class="input-field col s4">
             <select name="exploitationIntensity" required>
               <option value="0.05">Very Low (5% open time)</option>
               <option value="0.10">Low (10% open time)</option>
-              <option value="0.25" selected>Medium (25% open time)</option>
+              <option value="0.15" selected>Medium (15% open time)</option>
               <option value="0.20">Moderate (20% open time)</option>
               <option value="0.30">Somewhat High (30% open time)</option>
               <option value="0.50">High (50% open time)</option>
               <option value="0.75">Very High (75% open time)</option>
               <option value="1.0">Max (100% open time)</option>
             </select>
-            <label>Exploitation Intensity</label>
+            <label>{{ translate("exploitation_intensity", language) }}</label>
           </div>
         </div>
         <div class="row">
@@ -121,7 +166,7 @@
                 <option value="{{ day }}" selected>{{ day }}</option>
               {% endfor %}
             </select>
-            <label>Select Operating Days</label>
+            <label>{{ translate("operating_days", language) }}</label>
           </div>
         </div>
         <div class="row">
@@ -132,71 +177,51 @@
                 <option value="{{ h }}" {% if h == "08:00" %}selected{% endif %}>{{ h }}</option>
               {% endfor %}
             </select>
-            <label>Opening Time</label>
+            <label>{{ translate("opening_time", language) }}</label>
           </div>
           <div class="input-field col s6">
             <select name="closeTime" required>
               {% for hour in range(0,24) %}
                 {% set h = "%02d:00" % hour %}
-                <option value="{{ h }}" {% if h == "20:00" %}selected{% endif %}>{{ h }}</option>
+                <option value="{{ h }}" {% if h == "18:00" %}selected{% endif %}>{{ h }}</option>
               {% endfor %}
             </select>
-            <label>Closing Time</label>
+            <label>{{ translate("closing_time", language) }}</label>
           </div>
         </div>
       </fieldset>
       
       <div class="row center-align">
         <button class="btn waves-effect waves-light" type="submit">
-          CALCULATE SAVINGS <i class="material-icons right">send</i>
+          {{ translate("calculate", language) }} <i class="material-icons right">send</i>
         </button>
       </div>
     </form>
     
     {% if result %}
-      <h5 class="center-align">Results</h5>
-      <!-- Energy Consumption Table -->
-      <div class="row">
-        <div class="col s12">
-          <table class="striped">
-            <thead>
-              <tr>
-                <th>Month (m)</th>
-                <th>Effective Operating Hours (h)</th>
-                <th>Thermodynamical Energy Consumption without Air Curtain (kWh)</th>
-                <th>Thermodynamical Energy Consumption with Air Curtain (kWh)</th>
-                <th>Motor Energy Consumption (kWh)</th>
-                <th>Total Energy Consumption (kWh)</th>
-                <th>Savings (kWh)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for i in range(result.months|length) %}
-                <tr>
-                  <td>{{ result.months[i] }}</td>
-                  <td>{{ result.monthly_operating_hours[i] }}</td>
-                  <td>{{ result.energy_without[i] }}</td>
-                  <td>{{ result.energy_with[i] }}</td>
-                  <td>{{ result.motor_energy[i] }}</td>
-                  <td>{{ result.energy_with[i] + result.motor_energy[i] }}</td>
-                  <td>{{ result.monthly_savings[i] }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+      <div class="row center-align" style="margin-top:20px;">
+        <form action="/generate_pdf" method="POST">
+          <input type="hidden" name="report" value="{{ result | tojson }}">
+          <button class="btn waves-effect waves-light" type="submit">Generate PDF Report</button>
+        </form>
       </div>
-      
-      <!-- Temperature and Seasonal Data Table -->
-      <div class="row">
-        <div class="col s12">
+    {% endif %}
+    
+    {% if result %}
+      <div id="results">
+      <!-- Climate Data Table (formerly Temperature & Seasonal Data) -->
+      <div class="card">
+        <div class="card-content">
+          <span class="card-title">Climate Data ({{ chosen_station }})</span>
           <table class="striped">
             <thead>
               <tr>
                 <th>Month (m)</th>
-                <th>Avg. Outdoor Temp. (°C)</th>
-                <th>Outdoor Temp. for Operating Period (°C)</th>
-                <th>Indoor Room Temp. (°C)</th>
+                <th>Avg. Outdoor Temp. (all hours, °C)</th>
+                <th class="wind_all">Avg. Wind (all hours, m/s)</th>
+                <th>Avg. Outdoor Temp. (operating period, °C)</th>
+                <th class="wind_oper">Avg. Wind (operating period, m/s)</th>
+                <th class="indoor">Indoor Temp. (°C)</th>
                 <th>Season Info</th>
               </tr>
             </thead>
@@ -204,52 +229,91 @@
               {% for row in temp_table %}
                 <tr>
                   <td>{{ row.month }}</td>
-                  <td>{{ row.temperature }}</td>
-                  <td>{{ row.operating_temperature }}</td>
-                  <td>{{ row.indoor_temperature }}</td>
-                  <td>{{ row.season_warning }}</td>
+                  <td>{{ row.monthly_avg }}</td>
+                  <td class="wind_all">{{ row.wind_avg }}</td>
+                  <td>{{ row.operating_avg }}</td>
+                  <td class="wind_oper">{{ row.operating_wind }}</td>
+                  <td class="indoor">{{ row.indoor_temp }}</td>
+                  <td>{{ row.season_info }}</td>
                 </tr>
               {% endfor %}
             </tbody>
           </table>
-          <p class="center-align" style="font-size:0.9em; color:#555;">
-            (Data based on the nearest city: {{ chosen_city }})
-          </p>
+        </div>
+      </div>
+      
+      <!-- Energy Loss & Consumption Data Table -->
+      <div class="card" style="margin-top:20px;">
+        <div class="card-content">
+          <span class="card-title">{{ translate("energy_loss_data", language) }}</span>
+          <table class="striped">
+            <thead>
+              <tr>
+                <th>Month (m)</th>
+                <th class="operating">Effective Operating Hours (h)</th>
+                <th class="without">Thermodynamic energy consumption without air curtain (kWh)</th>
+                <th>Thermodynamic energy consumption with air curtain (kWh)</th>
+                <th>Electrical energy consumption of air curtain motor (kWh)</th>
+                <th class="total">Total energy consumption with air curtain (kWh)</th>
+                <th>Energy Savings (kWh)</th>
+                <th>Carbon Savings (kg CO₂)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for i in range(result.months|length) %}
+                <tr>
+                  <td>{{ result.months[i] }}</td>
+                  <td class="operating">{{ result.monthly_operating_hours[i] }}</td>
+                  <td class="without">{{ result.energy_without[i] }}</td>
+                  <td>{{ result.energy_with[i] }}</td>
+                  <td>{{ result.motor_energy[i] }}</td>
+                  <td class="total">{{ result.energy_with[i] + result.motor_energy[i] }}</td>
+                  <td>{{ result.monthly_savings[i] }}</td>
+                  <td>{{ result.monthly_carbon_savings[i] }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
       </div>
       
       <!-- Annual Summary Table -->
-      <div class="row">
-        <div class="col s12">
-          <table class="striped">
+      <div class="card" style="margin-top:20px;">
+        <div class="card-content">
+          <span class="card-title">{{ translate("annual_summary", language) }}</span>
+          <table class="striped annual">
             <thead>
               <tr>
-                <th>Annual Energy Loss &amp; Cost without Air Curtain</th>
-                <th>Annual Energy Loss &amp; Cost with Air Curtain</th>
+                <th>Annual Energy Loss &amp; Cost without AC</th>
+                <th>Annual Energy Loss &amp; Cost with AC</th>
                 <th>Benefits (Cost Savings)</th>
+                <th>Carbon Savings (kg CO₂/year)</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>
                   Energy Loss: {{ result.annual_energy_without }} kWh<br>
-                  Cost: {{ result.annual_cost_without }}
+                  Cost: <span class="cost">{{ result.annual_cost_without }}</span>
                 </td>
                 <td>
                   Energy Loss: {{ result.annual_energy_with }} kWh<br>
                   Motor Energy: {{ result.annual_motor_energy }} kWh<br>
-                  Curtain Cost: {{ result.annual_cost_with }}<br>
-                  Motor Cost: {{ result.annual_cost_motor }}<br>
-                  Total: {{ result.annual_energy_with_motor }} kWh, {{ result.annual_cost_with_motor }}
+                  Curtain Cost: <span class="cost">{{ result.annual_cost_with }}</span><br>
+                  Motor Cost: <span class="cost">{{ result.annual_cost_motor }}</span><br>
+                  Total: {{ result.annual_energy_with_motor }} kWh, <span class="cost">{{ result.annual_cost_with_motor }}</span>
                 </td>
                 <td>
                   Savings Energy: {{ result.annual_savings_energy }} kWh<br>
-                  Savings Cost: {{ result.annual_savings_cost }}<br>
+                  Savings Cost: <span class="cost">{{ result.annual_savings_cost }}</span><br>
                   {% if result.payback_period %}
                     Payback Period: {{ result.payback_period | round(2) }} years
                   {% else %}
                     Payback Period: N/A
                   {% endif %}
+                </td>
+                <td>
+                  {{ result.carbon_footprint }}
                 </td>
               </tr>
             </tbody>
@@ -257,81 +321,115 @@
         </div>
       </div>
       
-      <!-- Energy Consumption Chart -->
-      <div class="row">
-        <div class="col s12">
+      <!-- Charts -->
+      <div class="card" style="margin-top:20px;">
+        <div class="card-content">
+          <span class="card-title">{{ translate("monthly_energy", language) }}</span>
           <canvas id="energyChart"></canvas>
         </div>
       </div>
-      
-      <!-- Payback Period Comparison Chart -->
-      <div class="row">
-        <div class="col s12">
+      <div class="card" style="margin-top:20px;">
+        <div class="card-content">
+          <span class="card-title">{{ translate("cumulative_cost", language) }}</span>
           <canvas id="paybackChart"></canvas>
+        </div>
+      </div>
+      <div class="card" style="margin-top:20px;">
+        <div class="card-content">
+          <span class="card-title">Weekly Average Wind Speed (m/s)</span>
+          <canvas id="weeklyWindChart"></canvas>
+        </div>
+      </div>
+      <div class="card" style="margin-top:20px;">
+        <div class="card-content">
+          <span class="card-title">Weekly Average Temperature (°C)</span>
+          <canvas id="weeklyChart"></canvas>
         </div>
       </div>
     {% endif %}
   </div>
   
   <footer>
-    Version: {{ version }} | Program created by Filip Konieczny using AI tools.
+    Version: {{ version }} | Program created by Filip Konieczny using OpenAI tools.
   </footer>
   
   <!-- Modal Info -->
   <div id="infoModal" class="modal">
     <div class="modal-content">
-      <h5>How It Works</h5>
-      <p><strong>1. Data Acquisition:</strong><br>
-         The program loads monthly average outdoor temperature data and city coordinates from an external CSV file (<code>climate_data.txt</code>). This data is assumed to come from official meteorological databases such as IMGW (Poland), MeteoFrance (France), DWD (Germany), UK Met Office (UK), MétéoSwiss (Switzerland), AEMET (Spain) and IPMA (Portugal).</p>
-      
-      <p><strong>2. Location Selection:</strong><br>
-         Users select a location on a map of Europe. The program uses the <em>haversine</em> formula to determine the nearest city (from the CSV data) to the selected coordinates.</p>
-      
-      <p><strong>3. Temperature Approximation:</strong><br>
-         For each month, the base outdoor temperature (<em>T<sub>out</sub></em>) is taken from the CSV file. To approximate the effective temperature during building operating hours, the program uses a sinusoidal function to simulate diurnal temperature variations:<br>
-         <em>T<sub>operating</sub> = T<sub>out</sub> + A × sin(π/12 × (t − 5))</em><br>
-         where <em>A</em> is an amplitude constant (default = 5) and <em>t</em> spans from the opening to the closing time in steps (default step = 0.5 h). The average of these values over the operating period is used in further calculations.</p>
-      
-      <p><strong>4. Energy Consumption Calculation:</strong><br>
-         - <em>Natural Ventilation Flow:</em> The program estimates the natural airflow through the door using the formula:<br>
-         <em>Q<sub>natural</sub> = C<sub>d</sub> × A<sub>area</sub> × √(2×Δp/ρ)</em><br>
-         where Δp (pressure difference) is calculated as <em>ρ × g × height × (ΔT/T<sub>inside</sub>)</em> (with ρ = 1.2 kg/m³, g = 9.81 m/s², and T<sub>inside</sub> in Kelvin), and C<sub>d</sub> is the discharge coefficient (default = 0.6).
-         <br>
-         - <em>Adjusted Flow:</em> The natural flow is then corrected by a windiness factor.
-         <br>
-         - <em>Energy Loss:</em> The energy loss without an air curtain is calculated by multiplying the mass flow rate by the specific heat (c<sub>p</sub> = 1005 J/kg·K) and the temperature difference, integrated over the operating hours.
+      <h5>About the Calculator</h5>
+      <p>
+        This calculator is designed to assess the potential energy savings and carbon footprint reduction achievable by installing an air curtain at building entrances. It uses climate data (temperature and wind speed) derived from ERA5 reanalysis – processed by AI – to simulate hourly variations.
       </p>
-      
-      <p><strong>5. Air Curtain Effect:</strong><br>
-         When the air curtain is installed, its effectiveness (<em>η</em>) is computed as the ratio of the curtain’s flow capacity to the natural flow (capped at 1). The effective airflow becomes <em>Q<sub>effective</sub> = Q<sub>corrected</sub> × (1 − η)</em>, thereby reducing the energy loss. Additionally, the program accounts for the motor energy consumption during operation.
+      <p>
+        The calculator estimates thermodynamic energy loss due to natural ventilation and shows how an air curtain can reduce that loss. Savings are translated into cost savings and reductions in CO₂ emissions.
       </p>
-      
-      <p><strong>6. Savings and ROI:</strong><br>
-         The program sums the monthly energy losses (with and without the air curtain), calculates the corresponding costs (using the provided energy cost), and then determines the annual savings. Finally, the payback period is estimated as the ratio of the curtain's price to the annual cost savings.
+      <p>
+        Data sources: ERA5 reanalysis (Copernicus Climate Data Store), EN 13121, ASHRAE Handbook, and EPA Greenhouse Gas Equivalencies.
       </p>
-      
-      <p><strong>7. Output:</strong><br>
-         All results are displayed in tables and charts, including detailed monthly values and an annual summary.</p>
     </div>
     <div class="modal-footer">
       <a href="#!" class="modal-close waves-effect waves-green btn-flat">Close</a>
     </div>
   </div>
   
-  <!-- Materialize JS + Initialization -->
+  <!-- Modal CONTACT -->
+  <div id="kontaktModal" class="modal">
+    <div class="modal-content">
+      <h5>Contact</h5>
+      <p>
+        Filip Konieczny<br>
+        Email: <a href="mailto:filip.koniecz@gmail.com">filip.koniecz@gmail.com</a><br>
+        LinkedIn: <a href="https://www.linkedin.com/in/filip-konieczny/" target="_blank">https://www.linkedin.com/in/filip-konieczny/</a>
+      </p>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" class="modal-close waves-effect waves-green btn-flat">Close</a>
+    </div>
+  </div>
+  
+  <!-- Modal CALCULATIONS -->
+  <div id="calculationsModal" class="modal">
+    <div class="modal-content">
+      <h5>Calculations Details</h5>
+      <p>
+        <strong>Temperature Calculation:</strong><br>
+        Tₕ = baseline + A_day · sin(2π·(day − offset)/N) + amplitude · sin(2π·(hour − 6)/24)<br>
+        (Values processed by AI based on ERA5 data.)
+      </p>
+      <p>
+        <strong>Wind Speed Calculation:</strong><br>
+        Wₕ = wind_baseline + A_day_wind · sin(2π·(day − offset)/N) + wind_amplitude · sin(2π·(hour − 6)/24)<br>
+        (Monthly and operating period averages are computed from the hourly values.)<br>
+        <em>Data processed by AI from ERA5.</em>
+      </p>
+      <p>
+        <strong>Energy Consumption:</strong><br>
+        E = (Q · ρ · cₚ · ΔT / 1000) · effective_hours<br>
+        Q is adjusted by the wind multiplier from the 8‐step scale.<br>
+        <em>Reference: ASHRAE Handbook, EN 13121.</em>
+      </p>
+      <p>
+        <strong>Carbon Footprint:</strong><br>
+        Carbon Savings (kg CO₂) = (E_no − E_with) × 0.233<br>
+        (Calculated using official emission factors; Source: EPA.)
+      </p>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" class="modal-close waves-effect waves-green btn-flat">Close</a>
+    </div>
+  </div>
+  
+  <!-- Materialize JS & Leaflet -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-  <!-- Leaflet JS (bez integrity) -->
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" crossorigin=""></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       var elemsSelect = document.querySelectorAll('select');
       M.FormSelect.init(elemsSelect);
-      
-      var modalElems = document.querySelectorAll('.modal');
-      M.Modal.init(modalElems);
+      var modals = document.querySelectorAll('.modal');
+      M.Modal.init(modals);
     });
     
-    // Inicjalizacja mapy Leaflet
     var map = L.map('map').setView([54, 15], 4);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
@@ -350,6 +448,18 @@
       }
     });
     
+    document.getElementById('calcForm').addEventListener('submit', function(event) {
+      var lat = document.getElementById('lat').value;
+      var lng = document.getElementById('lng').value;
+      if (!lat || !lng) {
+        event.preventDefault();
+        M.toast({html: 'Missing data: please select a location on the map.'});
+        document.getElementById('map').scrollIntoView({behavior: "smooth"});
+      } else {
+        document.getElementById('loading').style.display = 'block';
+      }
+    });
+    
     {% if chart_data %}
     const data = {{ chart_data|safe }};
     const ctx = document.getElementById('energyChart').getContext('2d');
@@ -359,13 +469,13 @@
         labels: data.months,
         datasets: [
           {
-            label: 'Without Air Curtain',
+            label: 'Thermodynamic energy consumption without air curtain (kWh)',
             data: data.without,
             borderColor: 'red',
             fill: false
           },
           {
-            label: 'With Air Curtain + Motor',
+            label: 'Thermodynamic energy consumption with air curtain (kWh) + Motor',
             data: data.with,
             borderColor: 'green',
             fill: false
@@ -377,6 +487,10 @@
         plugins: {
           legend: { position: 'top' },
           title: { display: true, text: 'Monthly Energy Consumption' }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Month' } },
+          y: { title: { display: true, text: 'Energy (kWh)' } }
         }
       }
     });
@@ -391,13 +505,13 @@
         labels: paybackData.years,
         datasets: [
           {
-            label: 'Scenario 1: No Investment',
+            label: 'Cumulative Cost (EUR) without AC',
             data: paybackData.without,
             borderColor: 'red',
             fill: false
           },
           {
-            label: 'Scenario 2: With Investment',
+            label: 'Cumulative Cost (EUR) with AC + Motor',
             data: paybackData.with,
             borderColor: 'green',
             fill: false
@@ -408,10 +522,81 @@
         responsive: true,
         plugins: {
           legend: { position: 'top' },
-          title: { display: true, text: 'Cumulative Cost Comparison & Payback Period (years)' }
+          title: { display: true, text: 'Cumulative Cost Comparison (7 years)' }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Years' }, min: 0, max: 7 },
+          y: { title: { display: true, text: 'Cost (EUR)' } }
         }
       }
     });
+    {% endif %}
+    
+    {% if weekly_chart_data %}
+    const weeklyData = {{ weekly_chart_data|safe }};
+    const ctx3 = document.getElementById('weeklyChart').getContext('2d');
+    const weeklyChart = new Chart(ctx3, {
+      type: 'line',
+      data: {
+        labels: weeklyData.weeks,
+        datasets: [
+          {
+            label: 'Weekly Average Temperature (°C)',
+            data: weeklyData.avg,
+            borderColor: 'gray',
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: true, text: 'Weekly Average Temperature' }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Week Number' } },
+          y: { title: { display: true, text: 'Temperature (°C)' } }
+        }
+      }
+    });
+    {% endif %}
+    
+    {% if weekly_wind_chart_data %}
+    const weeklyWindData = {{ weekly_wind_chart_data|safe }};
+    const ctx4 = document.getElementById('weeklyWindChart').getContext('2d');
+    const weeklyWindChart = new Chart(ctx4, {
+      type: 'line',
+      data: {
+        labels: weeklyWindData.weeks,
+        datasets: [
+          {
+            label: 'Weekly Average Wind Speed (m/s)',
+            data: weeklyWindData.avg,
+            borderColor: 'blue',
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: true, text: 'Weekly Average Wind Speed' }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Week Number' } },
+          y: { title: { display: true, text: 'Wind Speed (m/s)' } }
+        }
+      }
+    });
+    {% endif %}
+    
+    {% if result %}
+    window.onload = function() {
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("results").scrollIntoView({ behavior: "smooth" });
+    };
     {% endif %}
   </script>
 </body>
