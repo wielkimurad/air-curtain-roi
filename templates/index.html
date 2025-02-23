@@ -21,7 +21,7 @@
     legend { font-weight: bold; }
     #map { height: 400px; margin-bottom: 20px; }
     table.striped td, table.striped th { text-align: center; }
-    /* Add vertical lines after specified columns */
+    /* Vertical lines for specified columns */
     th.wind_all, td.wind_all,
     th.wind_oper, td.wind_oper,
     th.indoor, td.indoor {
@@ -29,7 +29,7 @@
     }
     /* In Energy Loss table, no green coloring */
     .energy { font-weight: bold; color: inherit; }
-    /* For Annual Summary table, add vertical lines between columns */
+    /* For Annual Summary table, add vertical lines */
     table.annual td, table.annual th { border-right: 1px solid #ccc; }
     footer { font-size: 0.8em; text-align: right; margin-top: 20px; }
     .banner-title { font-family: 'Lobster', cursive; font-size: 200%; }
@@ -209,7 +209,7 @@
     
     {% if result %}
       <div id="results">
-      <!-- Climate Data Table (formerly Temperature & Seasonal Data) -->
+      <!-- Climate Data Table -->
       <div class="card">
         <div class="card-content">
           <span class="card-title">Climate Data ({{ chosen_station }})</span>
@@ -321,7 +321,7 @@
         </div>
       </div>
       
-      <!-- Charts -->
+      <!-- Charts: Only Monthly Energy and Cumulative Cost -->
       <div class="card" style="margin-top:20px;">
         <div class="card-content">
           <span class="card-title">{{ translate("monthly_energy", language) }}</span>
@@ -334,23 +334,11 @@
           <canvas id="paybackChart"></canvas>
         </div>
       </div>
-      <div class="card" style="margin-top:20px;">
-        <div class="card-content">
-          <span class="card-title">Weekly Average Wind Speed (m/s)</span>
-          <canvas id="weeklyWindChart"></canvas>
-        </div>
-      </div>
-      <div class="card" style="margin-top:20px;">
-        <div class="card-content">
-          <span class="card-title">Weekly Average Temperature (°C)</span>
-          <canvas id="weeklyChart"></canvas>
-        </div>
-      </div>
     {% endif %}
   </div>
   
   <footer>
-    Version: {{ version }} | Program created by Filip Konieczny using OpenAI tools.
+    Version: {{ version }} | Program created by Filip Konieczny.
   </footer>
   
   <!-- Modal Info -->
@@ -527,66 +515,6 @@
         scales: {
           x: { title: { display: true, text: 'Years' }, min: 0, max: 7 },
           y: { title: { display: true, text: 'Cost (EUR)' } }
-        }
-      }
-    });
-    {% endif %}
-    
-    {% if weekly_chart_data %}
-    const weeklyData = {{ weekly_chart_data|safe }};
-    const ctx3 = document.getElementById('weeklyChart').getContext('2d');
-    const weeklyChart = new Chart(ctx3, {
-      type: 'line',
-      data: {
-        labels: weeklyData.weeks,
-        datasets: [
-          {
-            label: 'Weekly Average Temperature (°C)',
-            data: weeklyData.avg,
-            borderColor: 'gray',
-            fill: false
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: { position: 'top' },
-          title: { display: true, text: 'Weekly Average Temperature' }
-        },
-        scales: {
-          x: { title: { display: true, text: 'Week Number' } },
-          y: { title: { display: true, text: 'Temperature (°C)' } }
-        }
-      }
-    });
-    {% endif %}
-    
-    {% if weekly_wind_chart_data %}
-    const weeklyWindData = {{ weekly_wind_chart_data|safe }};
-    const ctx4 = document.getElementById('weeklyWindChart').getContext('2d');
-    const weeklyWindChart = new Chart(ctx4, {
-      type: 'line',
-      data: {
-        labels: weeklyWindData.weeks,
-        datasets: [
-          {
-            label: 'Weekly Average Wind Speed (m/s)',
-            data: weeklyWindData.avg,
-            borderColor: 'blue',
-            fill: false
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: { position: 'top' },
-          title: { display: true, text: 'Weekly Average Wind Speed' }
-        },
-        scales: {
-          x: { title: { display: true, text: 'Week Number' } },
-          y: { title: { display: true, text: 'Wind Speed (m/s)' } }
         }
       }
     });

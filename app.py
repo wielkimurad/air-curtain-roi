@@ -7,7 +7,7 @@ from flask import Flask, render_template, request, make_response
 import pdfkit  # biblioteka do generowania PDF
 
 app = Flask(__name__)
-APP_VERSION = "9.0"  # Zaktualizowana wersja
+APP_VERSION = "9.1"  # Zaktualizowana wersja
 
 # Lista miesięcy
 months = ["January", "February", "March", "April", "May", "June",
@@ -58,11 +58,11 @@ currencies = ["EUR"]
 
 # 8-stopniowa skala wiatru – wartość pobierana z formularza (jako string) przekształcana do mnożnika
 wind_scale = {
-    "0": 0.0,    # brak wiatru
+    "0": 0.0,    # No Wind
     "1": 0.25,
     "2": 0.5,
     "3": 0.75,
-    "4": 1.0,    # medium (domyślnie)
+    "4": 1.0,    # Medium (default)
     "5": 1.25,
     "6": 1.5,
     "7": 1.75
@@ -77,6 +77,22 @@ def smooth_data(data, window=3):
         end = min(n, i + half + 1)
         smoothed.append(round(sum(data[start:end]) / (end - start), 1))
     return smoothed
+
+# Nowa funkcja – najpierw obliczamy średnie dzienne, potem grupujemy według tygodnia
+def compute_weekly_averages_from_daily(hourly_data):
+    daily = {}
+    for dt, value in hourly_data:
+        day = dt.date()
+        daily.setdefault(day, []).append(value)
+    daily_avg = {day: sum(values) / len(values) for day, values in daily.items()}
+    weekly = {}
+    for day, avg in daily_avg.items():
+        week = day.isocalendar()[1]
+        weekly.setdefault(week, []).append(avg)
+    weekly_avg = {week: round(sum(values) / len(values), 1) for week, values in weekly.items()}
+    weeks = sorted(weekly_avg.keys())
+    avg = [weekly_avg[w] for w in weeks]
+    return json.dumps({"weeks": weeks, "avg": avg})
 
 def get_reference_hourly_data_for_location(user_lat, user_lon):
     def haversine(lat1, lon1, lat2, lon2):
@@ -147,22 +163,6 @@ def generate_hourly_wind_year(wind_data):
                 hourly_wind.append((dt, wind))
     return hourly_wind
 
-def compute_weekly_averages(hourly_data):
-    weekly = {}
-    for dt, value in hourly_data:
-        if value is None:
-            continue
-        week = dt.isocalendar()[1]
-        if week not in weekly:
-            weekly[week] = []
-        weekly[week].append(value)
-    weekly_avg = {}
-    for week, values in weekly.items():
-        weekly_avg[week] = round(sum(values) / len(values), 1)
-    weeks = sorted(weekly_avg.keys())
-    avg = [weekly_avg[w] for w in weeks]
-    return json.dumps({"weeks": weeks, "avg": avg})
-
 @app.route("/", methods=["GET", "POST"])
 def index():
     result = None
@@ -178,7 +178,7 @@ def index():
         lat_val = request.form.get("lat")
         lng_val = request.form.get("lng")
         if not lat_val or not lng_val:
-            return "<script>alert('Brakuje danych: wybierz lokalizację na mapie.');document.getElementById('map').scrollIntoView({behavior: 'smooth'});window.history.back();</script>", 400
+            return "<script>alert('Missing data: please select a location on the map.');document.getElementById('map').scrollIntoView({behavior: 'smooth'});window.history.back();</script>", 400
         try:
             user_lat = float(lat_val)
             user_lon = float(lng_val)
@@ -191,17 +191,19 @@ def index():
         hourly_temp = generate_hourly_reference_year(temp_data)
         hourly_wind = generate_hourly_wind_year(wind_data)
         if all(temp is None for dt, temp in hourly_temp):
-            return "Error: Brak danych temperatur referencyjnych", 500
+            return "Error: No reference temperature data", 500
 
-        weekly_chart_data = compute_weekly_averages(hourly_temp)
-        weekly_wind_chart_data = compute_weekly_averages(hourly_wind)
-        # Wygładzamy dane wiatru, by wykres był bardziej równomierny
+        weekly_chart_data = compute_weekly_averages_from_daily(hourly_temp)
+        weekly_wind_chart_data = compute_weekly_averages_from_daily(hourly_wind)
+        # Wygładzamy dane obu wykresów, aby uniknąć efektu "piły"
+        weekly_temp_dict = json.loads(weekly_chart_data)
+        weekly_temp_dict["avg"] = smooth_data(weekly_temp_dict["avg"], window=3)
+        weekly_chart_data = json.dumps(weekly_temp_dict)
         weekly_wind_dict = json.loads(weekly_wind_chart_data)
         weekly_wind_dict["avg"] = smooth_data(weekly_wind_dict["avg"], window=3)
         weekly_wind_chart_data = json.dumps(weekly_wind_dict)
 
         energy_cost = round(float(request.form.get("energyCost", "0.25")), 2)
-        # Pobieramy wartość z 8-stopniowej skali
         windiness = request.form.get("windiness", "4")
         wind_multiplier = wind_scale.get(windiness, 1.0)
         width = float(request.form.get("width"))
@@ -277,20 +279,20 @@ def index():
             if full_avg is None or op_avg is None or op_wind_avg is None:
                 temp_table.append({
                     "month": months[m-1],
-                    "monthly_avg": "brak danych",
-                    "wind_avg": "brak danych",
-                    "operating_avg": "brak danych",
-                    "operating_wind": "brak danych",
-                    "indoor_temp": "brak danych",
+                    "monthly_avg": "No data",
+                    "wind_avg": "No data",
+                    "operating_avg": "No data",
+                    "operating_wind": "No data",
+                    "indoor_temp": "No data",
                     "season_info": f"Amplitude: {amp_value}°C"
                 })
             else:
                 if op_avg < indoor_temp_winter:
                     chosen_indoor = indoor_temp_winter
-                    season_info = "Automatic: winter season temperature selected"
+                    season_info = "Automatic: winter season selected"
                 elif op_avg > indoor_temp_summer:
                     chosen_indoor = indoor_temp_summer
-                    season_info = "Automatic: summer season temperature selected"
+                    season_info = "Automatic: summer season selected"
                 else:
                     chosen_indoor = op_avg
                     season_info = "Transitional season"
@@ -305,7 +307,7 @@ def index():
                     "season_info": season_info
                 })
 
-        # Obliczenia zużycia energii i śladu węglowego
+        # Energy and carbon calculations – uwzględniamy wpływ wiatru
         if all(val is not None for val in operating_avgs):
             energy_without = []
             energy_with = []
@@ -338,7 +340,6 @@ def index():
                 energy_without.append(int(round(E_no)))
                 energy_with.append(int(round(E_curtain)))
                 monthly_savings.append(int(round(savings)))
-                # Obliczamy miesięczną oszczędność śladu węglowego (kg CO₂)
                 monthly_carbon = round(savings * EMISSION_FACTOR, 1)
                 monthly_carbon_savings.append(monthly_carbon)
             annual_motor_energy = sum(motor_energy_list)
@@ -381,33 +382,33 @@ def index():
                 "with": [energy_with[i] + motor_energy_list[i] for i in range(12)]
             })
             payback_chart_data = json.dumps({
-                "years": list(range(0, 8)),  # ograniczenie do 7 lat (0-7)
+                "years": list(range(0, 8)),  # 0-7 = 7 years
                 "without": [annual_cost_without * y for y in range(0, 8)],
                 "with": [1100 + (annual_cost_with_motor * y) for y in range(0, 8)],
                 "payback": payback_period
             })
         else:
             result = {
-                "total_savings": "Brak danych",
-                "energy_without": "Brak danych",
-                "energy_with": "Brak danych",
-                "motor_energy": "Brak danych",
-                "monthly_carbon_savings": "Brak danych",
+                "total_savings": "No data",
+                "energy_without": "No data",
+                "energy_with": "No data",
+                "motor_energy": "No data",
+                "monthly_carbon_savings": "No data",
                 "months": months,
-                "monthly_savings": "Brak danych",
+                "monthly_savings": "No data",
                 "monthly_operating_hours": effective_monthly_hours,
-                "annual_energy_without": "Brak danych",
-                "annual_cost_without": "Brak danych",
-                "annual_energy_with": "Brak danych",
-                "annual_cost_with": "Brak danych",
-                "annual_motor_energy": "Brak danych",
-                "annual_cost_motor": "Brak danych",
-                "annual_energy_with_motor": "Brak danych",
-                "annual_cost_with_motor": "Brak danych",
-                "annual_savings_energy": "Brak danych",
-                "annual_savings_cost": "Brak danych",
-                "payback_period": "Brak danych",
-                "carbon_footprint": "Brak danych"
+                "annual_energy_without": "No data",
+                "annual_cost_without": "No data",
+                "annual_energy_with": "No data",
+                "annual_cost_with": "No data",
+                "annual_motor_energy": "No data",
+                "annual_cost_motor": "No data",
+                "annual_energy_with_motor": "No data",
+                "annual_cost_with_motor": "No data",
+                "annual_savings_energy": "No data",
+                "annual_savings_cost": "No data",
+                "payback_period": "No data",
+                "carbon_footprint": "No data"
             }
             chart_data = json.dumps({
                 "months": months,
@@ -418,7 +419,7 @@ def index():
                 "years": [],
                 "without": [],
                 "with": [],
-                "payback": "Brak danych"
+                "payback": "No data"
             })
 
         result["monthly_wind"] = monthly_avg_wind
